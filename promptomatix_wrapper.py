@@ -1,84 +1,98 @@
 import os
 import sys
+import json
 from typing import Any
-from dotenv import load_dotenv
 
-load_dotenv()
-KEY = os.getenv("OPENROUTER_API_KEY")
+import config
 
 # =================================================================
-# ПЕРЕКЛЮЧАТЕЛЬ ДВИЖКА ОПТИМИЗАЦИИ
-# True  = твой легкий и быстрый my_promptomatix (защита от 429)
-# False = официальная библиотека promptomatix (возможны падения по лимитам)
+# БЛОК 1: ЖЕСТКАЯ ХИРУРГИЯ БИБЛИОТЕК (MONKEY PATCHING)
 # =================================================================
-USE_CUSTOM_TUNER = True
-
-# =================================================================
-# БЛОК 1: НАСТРОЙКА И ПЕРЕХВАТЫ ДЛЯ ОФИЦИАЛЬНОЙ БИБЛИОТЕКИ
-# =================================================================
-os.environ["OPENAI_API_KEY"] = KEY
-os.environ["OPENROUTER_API_KEY"] = KEY
+os.environ["OPENAI_API_KEY"] = config.OPENROUTER_API_KEY or ""
+os.environ["OPENROUTER_API_KEY"] = config.OPENROUTER_API_KEY or ""
 os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
 
-try:
-    import litellm
-    _orig_litellm_comp = litellm.completion
-    def _patched_litellm_comp(*args, **kwargs):
-        kwargs["max_tokens"] = 1500 
-        if "api_base" in kwargs:
-            kwargs["api_base"] = "https://openrouter.ai/api/v1"
-        m = str(kwargs.get("model", ""))
-        if "gpt" in m:
-            kwargs["model"] = "openrouter/inclusionai/ling-2.6-1t:free"
-        return _orig_litellm_comp(*args, **kwargs)
-    litellm.completion = _patched_litellm_comp
-except Exception:
-    pass
-
+# 💉 ПАТЧИМ КЛИЕНТ OPENAI
 try:
     import openai
     if hasattr(openai, "OpenAI"):
         _original_init = openai.OpenAI.__init__
         def _patched_init(self, *args, **kwargs):
             kwargs['base_url'] = "https://openrouter.ai/api/v1"
-            kwargs['api_key'] = KEY
+            kwargs['api_key'] = config.OPENROUTER_API_KEY
             _original_init(self, *args, **kwargs)
         openai.OpenAI.__init__ = _patched_init
         
     if hasattr(openai.resources.chat.completions.Completions, "create"):
         _orig_create = openai.resources.chat.completions.Completions.create
         def _patched_create(self, *args, **kwargs):
-            kwargs["max_tokens"] = 1500
-            m = kwargs.get("model", "")
-            if "gpt" in m:
-                kwargs["model"] = "inclusionai/ling-2.6-1t:free"
-            return _orig_create(self, *args, **kwargs)
+            # Жестко пробрасываем модель из конфига
+            kwargs["model"] = config.SYSTEM_MODEL
+            
+            # Делаем реальный запрос к API
+            response = _orig_create(self, *args, **kwargs)
+            
+            # 🛡 ИСПРАВЛЯЕМ БАГИ БИБЛИОТЕКИ ПРЯМО НА ЛЕТУ
+            # Насильно превращаем любой ответ в строку, чтобы DSPy не подавился
+            if hasattr(response, 'choices'):
+                for choice in response.choices:
+                    if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                        content = choice.message.content
+                        if content is None:
+                            # Спасает от 'NoneType' object has no attribute 'split'
+                            choice.message.content = "" 
+                        elif isinstance(content, dict) or isinstance(content, list):
+                            # Спасает от 'dict' object has no attribute 'strip'
+                            choice.message.content = json.dumps(content, ensure_ascii=False)
+                        else:
+                            choice.message.content = str(content)
+            return response
         openai.resources.chat.completions.Completions.create = _patched_create
+except Exception as e:
+    print(f"Ошибка применения патча OpenAI: {e}")
+
+# 💉 ПАТЧИМ КЛИЕНТ LITELLM (на всякий случай, если библиотека пойдет этим путем)
+try:
+    import litellm
+    _orig_litellm_comp = litellm.completion
+    def _patched_litellm_comp(*args, **kwargs):
+        if "api_base" in kwargs:
+            kwargs["api_base"] = "https://openrouter.ai/api/v1"
+        
+        sys_mod = config.SYSTEM_MODEL
+        if not sys_mod.startswith("openrouter/"):
+            sys_mod = f"openrouter/{sys_mod}"
+        kwargs["model"] = sys_mod
+        
+        response = _orig_litellm_comp(*args, **kwargs)
+        
+        # Тот же самый бронежилет для ответов
+        if hasattr(response, 'choices'):
+            for choice in response.choices:
+                if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                    content = choice.message.content
+                    if content is None:
+                        choice.message.content = ""
+                    elif isinstance(content, dict) or isinstance(content, list):
+                        choice.message.content = json.dumps(content, ensure_ascii=False)
+                    else:
+                        choice.message.content = str(content)
+        return response
+    litellm.completion = _patched_litellm_comp
 except Exception:
     pass
 
-# Добавляем пути к обеим библиотекам
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Динамически привязываем пути
-LIB_PATH = os.path.join(BASE_DIR, 'promptomatix', 'src')
-if LIB_PATH not in sys.path:
-    sys.path.append(LIB_PATH)
-
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
 
 # =================================================================
 # БЛОК 2: ГЛАВНАЯ ФУНКЦИЯ-ОБЕРТКА
 # =================================================================
-def promptomatix_optimize(prompt: str, model: str, ch_lim: int, 
-                          system_model: str) -> dict[str, str | Any]:
+def promptomatix_optimize(prompt: str, model: str, ch_lim: int, system_model: str) -> dict[str, str | Any]:
     
-    if USE_CUSTOM_TUNER:
+    if config.USE_CUSTOM_TUNER:
         print("\n🚀 Используем бронебойный кастомный движок (my_promptomatix)...")
         from my_promptomatix.tuner import FullPromptTuner
         
-        # Запуск твоего оркестратора[cite: 13]
         tuner = FullPromptTuner(target_model=model, system_model=system_model)
         result = tuner.run(
             start_prompt=prompt, 
@@ -102,54 +116,22 @@ def promptomatix_optimize(prompt: str, model: str, ch_lim: int,
         if not safe_model_name.startswith("openrouter/"):
             safe_model_name = f"openrouter/{safe_model_name}"
         
-        # config = {
-        #     "raw_input": task_instruction,
-        #     "model_name": safe_model_name, 
-        #     "model_api_key": KEY,
-        #     "model_provider": "openai", 
-        #     "backend": "simple_meta_prompt",
-        #     "synthetic_data_size": 1, 
-        #     "task_type": "generation",
-        #     "max_tokens": 300,
-        #     "api_base": "https://openrouter.ai/api/v1"
-        # }
-
-        config = {
+        setup_config = {
             "raw_input": task_instruction,
             "model_name": safe_model_name, 
-            "model_api_key": KEY,
+            "model_api_key": config.OPENROUTER_API_KEY,
             "model_provider": "openai", 
-            
-            # 1. Самый дешевый бэкенд. Отключает сложные графы DSPy[cite: 7].
             "backend": "simple_meta_prompt",
-            
-            # 2. ЖЕСТКО задаем тип задачи. 
-            # Иначе она тратит целый запрос (около 500-1000 токенов) просто чтобы понять,
-            # что "2+2" — это задача типа "generation"[cite: 7].
             "task_type": "generation", 
-            
-            # 3. Минимум синтетических данных. 
-            # 1 пример — это физический минимум, чтобы библиотека не упала с ошибкой деления на ноль.
             "synthetic_data_size": 1, 
-            
-            # 4. Соотношение данных.
-            # Ставим 1.0 (или 0.99), чтобы все данные (наш 1 пример) ушли в train, 
-            # и она не тратила токены на дополнительный этап валидации (Valid: 0).
             "train_ratio": 0.99,
-            
-            # 5. Низкая температура. 
-            # Делает ответы модели сухими, короткими и без "воды"[cite: 7, 9].
             "temperature": 0.1,
-            
-            # 6. Ограничение ответа.
-            # Не даем ей разглагольствовать в ответах.
-            "max_tokens": 300, 
-            
+            "max_tokens": 800, 
             "api_base": "https://openrouter.ai/api/v1"
         }
         
         try:
-            result = process_input(**config)
+            result = process_input(**setup_config)
             if result and 'result' in result:
                 optimized = result['result']
             else:

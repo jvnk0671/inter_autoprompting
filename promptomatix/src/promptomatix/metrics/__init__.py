@@ -1,3 +1,0 @@
-"""
-Metrics and evaluation components.
-"""
