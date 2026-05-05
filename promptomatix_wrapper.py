@@ -1,107 +1,3 @@
-# import os
-# import sys
-# from typing import Any
-# from dotenv import load_dotenv
-
-# load_dotenv()
-# KEY = os.getenv("OPENROUTER_API_KEY")
-
-# # =================================================================
-# # ULTIMATE INTERCEPTOR v7: 100% Рабочая резервная модель
-# # =================================================================
-# os.environ["OPENAI_API_KEY"] = KEY
-# os.environ["OPENROUTER_API_KEY"] = KEY
-# os.environ["OPENAI_API_BASE"] = "https://openrouter.ai/api/v1"
-
-# # 1. Перехват LiteLLM (Только для внутренних нужд библиотеки)
-# try:
-#     import litellm
-#     _orig_litellm_comp = litellm.completion
-#     def _patched_litellm_comp(*args, **kwargs):
-#         kwargs["max_tokens"] = 1500 
-        
-#         if "api_base" in kwargs:
-#             kwargs["api_base"] = "https://openrouter.ai/api/v1"
-            
-#         m = str(kwargs.get("model", ""))
-#         # Меняем платные GPT на модель, которая 100% работает (проверено логами)
-#         if "gpt" in m:
-#             kwargs["model"] = "openrouter/inclusionai/ling-2.6-1t:free"
-            
-#         return _orig_litellm_comp(*args, **kwargs)
-#     litellm.completion = _patched_litellm_comp
-# except Exception:
-#     pass
-
-# # 2. Перехват чистого OpenAI SDK
-# try:
-#     import openai
-#     if hasattr(openai, "OpenAI"):
-#         _original_init = openai.OpenAI.__init__
-#         def _patched_init(self, *args, **kwargs):
-#             kwargs['base_url'] = "https://openrouter.ai/api/v1"
-#             kwargs['api_key'] = KEY
-#             _original_init(self, *args, **kwargs)
-#         openai.OpenAI.__init__ = _patched_init
-        
-#     if hasattr(openai.resources.chat.completions.Completions, "create"):
-#         _orig_create = openai.resources.chat.completions.Completions.create
-#         def _patched_create(self, *args, **kwargs):
-#             kwargs["max_tokens"] = 1500
-#             m = kwargs.get("model", "")
-#             if "gpt" in m:
-#                 kwargs["model"] = "inclusionai/ling-2.6-1t:free"
-#             return _orig_create(self, *args, **kwargs)
-#         openai.resources.chat.completions.Completions.create = _patched_create
-# except Exception:
-#     pass
-# # =================================================================
-
-# LIB_PATH = '/Users/alexanderbyakovapple/Promtrep/promptomatix/src'
-# if LIB_PATH not in sys.path:
-#     sys.path.append(LIB_PATH)
-
-# from promptomatix.main import process_input
-
-# def promptomatix_optimize(prompt: str, model: str, ch_lim: int, 
-#                           system_model: str) -> dict[str, str | Any]:
-    
-#     task_instruction = f"Strict limitation: the final prompt must not exceed {ch_lim} characters. Loss of meaning is unacceptable. Prompt to optimize: {prompt}"
-    
-#     safe_model_name = system_model
-#     if not safe_model_name.startswith("openrouter/"):
-#         safe_model_name = f"openrouter/{safe_model_name}"
-    
-#     config = {
-#         "raw_input": task_instruction,
-#         "model_name": safe_model_name, 
-#         "model_api_key": KEY,
-#         "model_provider": "openai", 
-#         "backend": "simple_meta_prompt",
-#         "synthetic_data_size": 1, 
-#         "task_type": "generation",
-#         "max_tokens": 1500,
-#         "api_base": "https://openrouter.ai/api/v1"
-#     }
-    
-#     try:
-#         result = process_input(**config)
-#         if result and 'result' in result:
-#             optimized = result['result']
-#         else:
-#             optimized = f"Optimization failed silently. Library returned: {result}"
-#     except Exception as e:
-#         optimized = f"Error during optimization: {e}"
-    
-#     return {
-#         'optimized_prompt': optimized,
-#         'init_metric': 0.0,
-#         'final_metric': 0.0
-#     }
-
-
-
-
 import os
 import sys
 from typing import Any
@@ -162,13 +58,15 @@ except Exception:
     pass
 
 # Добавляем пути к обеим библиотекам
-LIB_PATH = '/Users/alexanderbyakovapple/Promtrep/inter_autoprompting/promptomatix/src'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Динамически привязываем пути
+LIB_PATH = os.path.join(BASE_DIR, 'promptomatix', 'src')
 if LIB_PATH not in sys.path:
     sys.path.append(LIB_PATH)
 
-PROJECT_PATH = '/Users/alexanderbyakovapple/Promtrep/inter_autoprompting'
-if PROJECT_PATH not in sys.path:
-    sys.path.append(PROJECT_PATH)
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
 # =================================================================
 # БЛОК 2: ГЛАВНАЯ ФУНКЦИЯ-ОБЕРТКА
