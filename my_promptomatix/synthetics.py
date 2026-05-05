@@ -39,8 +39,9 @@ class Evaluator:
             
             score_str = self.judge.generate(sys_judge, user_judge, temperature=0.0)
             try:
-                score = int(filter(str.isdigit, score_str))
-                total_score += (score / 10.0)
+                digits = "".join(filter(str.isdigit, score_str))
+                score = int(digits) if digits else 5
+                total_score += min(max(score, 0), 10) / 10.0
             except:
                 total_score += 0.5 # Средний балл при ошибке парсинга
 
