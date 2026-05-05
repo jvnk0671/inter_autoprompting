@@ -11,7 +11,8 @@ load_dotenv()
 KEY = os.getenv("OPENROUTER_API_KEY")
 
 # системную модель лучше делать быстродумающей, т.к. существует лимит, который вызывает ошибку
-std_sys_model = 'meta-llama/llama-3.3-70b-instruct:free'
+# std_sys_model = 'meta-llama/llama-3.3-70b-instruct:free'
+std_sys_model = 'inclusionai/ling-2.6-1t:free'
 # с reasoning работает очень долго. наверное, можно сделать как опцию в будущем
 reasoning_trg_model = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free'
 
