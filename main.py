@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional, Any
+from typing import Optional
 
-from pipeline import Pipeline
-from autoprompting import ExampleOptimiser, PromptomatixOptimizer
-from cool_prompt import CoolPromptOptimizer
+from autoprompting import (
+    CoolPromptOptimizer,
+    ExampleOptimiser,
+    Pipeline,
+    PromptomatixOptimizer,
+)
 
 app = FastAPI()
 
@@ -29,8 +32,6 @@ class OptimizeRequest(BaseModel):
 
 class OptimizeResponse(BaseModel):
     optimized_prompt: str
-    init_metric: Optional[Any] = None
-    final_metric: Optional[Any] = None
     init_tokens: Optional[int] = None
     final_tokens: Optional[int] = None
 
@@ -46,9 +47,9 @@ def optimize(req: OptimizeRequest):
         raise HTTPException(status_code=400, detail="Prompt is empty")
 
     if req.method == "coolprompt":
-        optimizer = CoolPromptOptimizer()
+        optimizer = CoolPromptOptimizer(target_model=req.target_model, system_model=req.system_model)
     elif req.method == "promptomatix":
-        optimizer = PromptomatixOptimizer()
+        optimizer = PromptomatixOptimizer(target_model=req.target_model, system_model=req.system_model)
     elif req.method == "example":
         optimizer = ExampleOptimiser()
     else:
@@ -69,8 +70,6 @@ def optimize(req: OptimizeRequest):
 
     return OptimizeResponse(
         optimized_prompt=res.optimized_prompt,
-        init_metric=res.init_metric,
-        final_metric=res.final_metric,
         init_tokens=res.init_tokens,
         final_tokens=res.final_tokens,
     )

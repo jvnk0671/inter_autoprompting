@@ -1,9 +1,9 @@
 import logging
-from transformers import AutoTokenizer
-from typing import Any, Optional
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from functools import lru_cache
+from typing import Optional
 
-from pipeline import OptimizationResult
 import promptomatix_wrapper
 from cool_prompt import coolprompt_optimize
 
@@ -28,27 +28,36 @@ class PromptOptimizer(ABC):
         pass
 
 
+class ExampleOptimiser(PromptOptimizer):
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        return OptimizationResult(optimized_prompt=_fallback_cut(prompt, ch_lim))
+
+
 class CoolPromptOptimizer(PromptOptimizer):
-    def __init__(self, target_model_: str = std_sys_model2):
-        self.target_model = target_model_
+    def __init__(
+        self, target_model: str = std_sys_model2, system_model: Optional[str] = None
+    ):
+        self.target_model = target_model
+        self.system_model = system_model or target_model
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
         optimized = coolprompt_optimize(
-            prompt=prompt, model=self.target_model, ch_lim=ch_lim
+            prompt=prompt,
+            model=self.target_model,
+            ch_lim=ch_lim,
         )
-
         return OptimizationResult(optimized_prompt=optimized)
 
 
-class ExampleOptimiser(PromptOptimizer):
-    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
-        return OptimizationResult(optimized_prompt=prompt[:ch_lim])
-
-
 class PromptomatixOptimizer(PromptOptimizer):
-    def __init__(self, model: str = std_sys_model2, use_custom=False):
-        self.target_model = model
-        self.system_model = model
+    def __init__(
+        self,
+        target_model: str = reasoning_trg_model,
+        system_model: str = std_sys_model2,
+        use_custom: bool = True,
+    ):
+        self.target_model = target_model
+        self.system_model = system_model
         self.use_custom = use_custom
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
@@ -59,43 +68,65 @@ class PromptomatixOptimizer(PromptOptimizer):
             system_model=self.system_model,
             ch_lim=ch_lim,
         )
-        return OptimizationResult()
+        return OptimizationResult(
+            optimized_prompt=str(
+                result.get("optimized_prompt", _fallback_cut(prompt, ch_lim))
+            )
+        )
 
 
 @lru_cache(maxsize=4)
 def get_tokenizer(model: str):
-    """Получить токенизатор по модели"""
-    logger.info(f"Getting tokenizer...")
-    return AutoTokenizer.from_pretrained(model)
+    try:
+        from transformers import AutoTokenizer
+
+        logger.info("Getting tokenizer...")
+        return AutoTokenizer.from_pretrained(model)
+    except Exception as exc:
+        logger.warning(
+            "Tokenizer is unavailable (%s). Using rough token estimate.", exc
+        )
+        return None
 
 
 def token_counter(prompt: str, model: str) -> int:
-    """Используя токенизатор, посчитать токены по промпту"""
     tokenizer = get_tokenizer(model)
+    if tokenizer is None:
+        return max(1, len(prompt.split()))
     return len(tokenizer.encode(prompt))
 
 
+def _fallback_cut(prompt: str, ch_limit: int) -> str:
+    text = " ".join(prompt.split())
+    if ch_limit <= 0:
+        return ""
+    if len(text) <= ch_limit:
+        return text
+    return text[:ch_limit].rsplit(" ", 1)[0] or text[:ch_limit]
+
+
 def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
-    """Прямая обрезка промпта со слегка щадящей погрешностью и приоритетом обрезания символов"""
-    max_limit = uncertainty + ch_limit
+    if ch_limit <= 0:
+        return ""
+
+    max_limit = ch_limit + max(0, uncertainty)
     if len(prompt) <= max_limit:
-        return prompt
+        return prompt.rstrip(" ")
 
-    min_limit = max(0, ch_limit - uncertainty)
+    min_limit = max(0, ch_limit - max(0, uncertainty))
     cut = prompt[:max_limit]
-
     markers_prior = [["\n"], [".", "!", "?"], [",", ";"], [" "]]
 
-    for i in markers_prior:
-        further_idx = max(cut.rfind(t) for t in i)
+    for markers in markers_prior:
+        further_idx = max(cut.rfind(marker) for marker in markers)
         if further_idx >= min_limit:
             return cut[: further_idx + 1].rstrip(" ")
 
     space = cut.rfind(" ")
-    if space != -1:
-        return cut[:space]
+    if space >= min_limit:
+        return cut[:space].rstrip(" ")
 
-    return cut
+    return cut.rstrip(" ")
 
 
 class Pipeline:
@@ -104,38 +135,26 @@ class Pipeline:
         self.model = model
 
     def run(self, prompt: str, ch_limit: int, uncertainty: int) -> OptimizationResult:
-        logger.info(f"Prompt to optimize: {prompt}")
+        logger.info("Prompt to optimize: %s", prompt)
         res = self.optimizer.optimize(prompt, ch_limit)
         res.optimized_prompt = radical_cut(res.optimized_prompt, ch_limit, uncertainty)
         res.init_tokens = token_counter(prompt, self.model)
         res.final_tokens = token_counter(res.optimized_prompt, self.model)
 
-        logger.info(f"Optimized successfully! {res.init_tokens} -> {res.final_tokens}")
-
+        logger.info(
+            "Optimized successfully! %s -> %s", res.init_tokens, res.final_tokens
+        )
         return res
 
 
 if __name__ == "__main__":
     prompt_test = (
-        "You are a helpful mathematical assistant. Answer the question: investigate the convergence of the "
-        "integral from 1 to +inf (sin(x))^2/x"
+        "You are a helpful mathematical assistant. Answer the question: investigate "
+        "the convergence of the integral from 1 to +inf (sin(x))^2/x"
     )
-    ch_lim_test = 40
-    unsertainty_test = 35
-    TARGET_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
-
-    coolprompt_opt = CoolPromptOptimizer(
-        target_model=TARGET_MODEL,
-    )
-
     pipeline = Pipeline(
-        optimizer=coolprompt_opt, model=TARGET_MODEL.replace(":free", "")
+        optimizer=ExampleOptimiser(),
+        model=std_sys_model2.replace(":free", ""),
     )
-
-    try:
-        res = pipeline.run(
-            prompt=prompt_test, ch_limit=ch_lim_test, uncertainty=unsertainty_test
-        )
-        logger.info(f"Finally: {res.optimized_prompt}")
-    except Exception as e:
-        logger.error(f"ERROR: \n\n{e}\n")
+    result = pipeline.run(prompt=prompt_test, ch_limit=40, uncertainty=35)
+    logger.info("Finally: %s", result.optimized_prompt)
