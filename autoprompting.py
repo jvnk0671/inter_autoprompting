@@ -5,11 +5,15 @@ from transformers import AutoTokenizer
 from functools import lru_cache
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+import promptomatix_wrapper
 from cool_prompt import coolprompt_optimize
-
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+std_sys_model = "meta-llama/llama-3.3-70b-instruct:free"
+std_sys_model2 = "inclusionai/ling-2.6-1t:free"
+reasoning_trg_model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
 
 @dataclass
@@ -25,24 +29,16 @@ class PromptOptimizer(ABC):
         pass
 
 
-
-
 class CoolPromptOptimizer(PromptOptimizer):
-    def __init__(self, target_model: str):
-        self.target_model = target_model
+    def __init__(self, target_model_: str = std_sys_model2):
+        self.target_model = target_model_
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
         optimized = coolprompt_optimize(
-            prompt=prompt,
-            model=self.target_model,
-            ch_lim=ch_lim
+            prompt=prompt, model=self.target_model, ch_lim=ch_lim
         )
 
-        return OptimizationResult(
-            optimized_prompt=optimized
-        )
-
-
+        return OptimizationResult(optimized_prompt=optimized)
 
 
 class ExampleOptimiser(PromptOptimizer):
@@ -50,19 +46,39 @@ class ExampleOptimiser(PromptOptimizer):
         return OptimizationResult(optimized_prompt=prompt[:ch_lim])
 
 
+class PromptomatixOptimizer(PromptOptimizer):
+    def __init__(self, target_model: str, system_model: str, use_custom: bool = True):
+        self.target_model = target_model
+        self.system_model = system_model
+        self.use_custom = use_custom
+
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        promptomatix_wrapper.USE_CUSTOM_TUNER = self.use_custom
+        result = promptomatix_wrapper.promptomatix_optimize(
+            prompt=prompt,
+            model=self.target_model,
+            system_model=self.system_model,
+            ch_lim=ch_lim,
+        )
+        return OptimizationResult(
+            optimized_prompt=result["optimized_prompt"],
+            init_metric=result.get("init_metric", 0.0),
+            final_metric=result.get("final_metric", 0.0),
+        )
 
 
-# TODO: когда окончательно определимся с моделями, можно попробовать скачать файлы токенизаторов
 @lru_cache(maxsize=4)
 def get_tokenizer(model: str):
     """Получить токенизатор по модели"""
     logger.info(f"Getting tokenizer...")
     return AutoTokenizer.from_pretrained(model)
 
+
 def token_counter(prompt: str, model: str) -> int:
     """Используя токенизатор, посчитать токены по промпту"""
     tokenizer = get_tokenizer(model)
     return len(tokenizer.encode(prompt))
+
 
 def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
     """Прямая обрезка промпта со слегка щадящей погрешностью и приоритетом обрезания символов"""
@@ -73,24 +89,18 @@ def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
     min_limit = max(0, ch_limit - uncertainty)
     cut = prompt[:max_limit]
 
-    markers_prior = [
-        ['\n'],
-        ['.', '!', '?'],
-        [',', ';'],
-        [' ']
-    ]
+    markers_prior = [["\n"], [".", "!", "?"], [",", ";"], [" "]]
 
     for i in markers_prior:
         further_idx = max(cut.rfind(t) for t in i)
         if further_idx >= min_limit:
-            return cut[:further_idx + 1].rstrip(' ')
+            return cut[: further_idx + 1].rstrip(" ")
 
-    space = cut.rfind(' ')
+    space = cut.rfind(" ")
     if space != -1:
         return cut[:space]
 
     return cut
-
 
 
 class Pipeline:
@@ -110,28 +120,27 @@ class Pipeline:
         return res
 
 
-
-
-if __name__ == '__main__':
-    prompt_test = ('You are a helpful mathematical assistant. Answer the question: investigate the convergence of the '
-              'integral from 1 to +inf (sin(x))^2/x')
+if __name__ == "__main__":
+    prompt_test = (
+        "You are a helpful mathematical assistant. Answer the question: investigate the convergence of the "
+        "integral from 1 to +inf (sin(x))^2/x"
+    )
     ch_lim_test = 40
     unsertainty_test = 35
-    TARGET_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+    TARGET_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 
     coolprompt_opt = CoolPromptOptimizer(
         target_model=TARGET_MODEL,
     )
 
     pipeline = Pipeline(
-        optimizer=coolprompt_opt,
-        model=TARGET_MODEL.replace(':free', '')
+        optimizer=coolprompt_opt, model=TARGET_MODEL.replace(":free", "")
     )
 
     try:
-        res = pipeline.run(prompt=prompt_test, ch_limit=ch_lim_test, uncertainty=unsertainty_test)
+        res = pipeline.run(
+            prompt=prompt_test, ch_limit=ch_lim_test, uncertainty=unsertainty_test
+        )
         logger.info(f"Finally: {res.optimized_prompt}")
     except Exception as e:
         logger.error(f"ERROR: \n\n{e}\n")
-
-

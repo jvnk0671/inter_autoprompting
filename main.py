@@ -46,23 +46,16 @@ def optimize(req: OptimizeRequest):
         raise HTTPException(status_code=400, detail="Prompt is empty")
 
     if req.method == "coolprompt":
-        optimizer = CoolPromptOptimizer(
-            target_model=req.target_model,
-            system_model=req.system_model,
-        )
+        optimizer = CoolPromptOptimizer()
     elif req.method == "promptomatix":
-        optimizer = PromptomatixOptimizer(
-            target_model=req.target_model,
-            system_model=req.system_model,
-        )
+        optimizer = PromptomatixOptimizer()
     elif req.method == "example":
         optimizer = ExampleOptimiser()
     else:
         raise HTTPException(status_code=400, detail=f"Unknown method: {req.method}")
 
     pipeline = Pipeline(
-        optimizer=optimizer,
-        model=req.system_model.replace(":free", "")
+        optimizer=optimizer, model=req.system_model.replace(":free", "")
     )
 
     try:
