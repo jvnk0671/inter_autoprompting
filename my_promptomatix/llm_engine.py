@@ -5,6 +5,7 @@ import re
 import logging
 from openai import OpenAI
 from typing import Optional, Dict, Any, List
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,8 @@ class RobustLLMEngine:
         return ""
 
     def generate_json(self, system_prompt: str, user_prompt: str) -> Optional[List[Dict[str, Any]]]:
-        """Умный метод для извлечения данных без использования платного JSON Mode."""
-        system_prompt += "\n\nCRITICAL: Return ONLY valid JSON array. No markdown blocks, no intro, no outro."
+       def generate_json(self, system_prompt: str, user_prompt: str) -> Optional[List[Dict[str, Any]]]:
+        system_prompt += config.JSON_ENFORCER
         raw_text = self.generate(system_prompt, user_prompt, temperature=0.1)
         
         # Извлекаем JSON даже если модель обернула его в markdown ```json ...

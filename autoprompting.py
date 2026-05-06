@@ -1,17 +1,34 @@
+import os
+import sys
 import logging
+
+# 1. СНАЧАЛА ИМПОРТИРУЕМ ТОЛЬКО КОНФИГ
+import config
+
+# 2. ВКЛЮЧАЕМ ЯДЕРНЫЙ ГЛУШИТЕЛЬ (до импорта остальных библиотек)
+if getattr(config, 'SILENT_MODE', False):
+    # Глушим всё на уровне ядра
+    logging.disable(logging.CRITICAL)
+    # Удаляем любые выводы в консоль, если они уже успели создаться
+    for handler in logging.root.handlers[:]:
+        logging.root.removeHandler(handler)
+    # Намертво блокируем попытки библиотек создать новые логгеры
+    logging.basicConfig = lambda *args, **kwargs: None
+else:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+logger = logging.getLogger(__name__)
+
+# 3. И ТОЛЬКО ТЕПЕРЬ ИМПОРТИРУЕМ ОСТАЛЬНОЕ
 from typing import Any, Optional
 from transformers import AutoTokenizer
 from functools import lru_cache
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-# Импорты наших модулей и конфига
 from cool_prompt import coolprompt_optimize
 import promptomatix_wrapper
-import config
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-logger = logging.getLogger(__name__)
 
 @dataclass
 class OptimizationResult:
@@ -138,6 +155,18 @@ if __name__ == '__main__':
             ch_limit=config.DEFAULT_CHAR_LIMIT, 
             uncertainty=config.DEFAULT_UNCERTAINTY
         )
-        logger.info(f"Finally: {res.optimized_prompt}")
+        
+        # Счищаем теги от Llama, чтобы результат был кристально чистым
+        clean_prompt = res.optimized_prompt.replace('<optimized_prompt>', '').replace('</optimized_prompt>', '').strip()
+        
+        # УМНЫЙ ВЫВОД РЕЗУЛЬТАТА
+        if getattr(config, 'SILENT_MODE', False):
+            # Если включен режим тишины — выводим ТОЛЬКО голый текст через обычный print
+            print(clean_prompt)
+        else:
+            # Если режим обычный — выводим красиво через логгер со словом Finally
+            logger.info(f"Finally: {clean_prompt}")
+            
     except Exception as e:
-        logger.error(f"ERROR: \n\n{e}\n")
+        if not getattr(config, 'SILENT_MODE', False):
+            logger.error(f"ERROR: \n\n{e}\n")

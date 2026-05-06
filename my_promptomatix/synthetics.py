@@ -1,6 +1,7 @@
 import logging
 from typing import List, Dict, Any
 from .llm_engine import RobustLLMEngine
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,7 @@ class DataGenerator:
 
     def generate_samples(self, task_description: str, num_samples: int = 3) -> List[Dict[str, str]]:
         logger.info(f"Генерация {num_samples} тестовых примеров...")
-        sys_prompt = (
-            f"You are a data generator. Create {num_samples} diverse testing examples for the following task. "
-            f"Output must be a JSON array of objects with keys 'input' and 'expected_output'."
-        )
+        sys_prompt = config.DATA_GEN_PROMPT.format(num_samples=num_samples)
         samples = self.engine.generate_json(sys_prompt, f"Task: {task_description}")
         return samples if samples else []
 
@@ -34,8 +32,11 @@ class Evaluator:
             actual_output = self.target.generate(prompt, data['input'])
             
             # 2. Судья оценивает ответ от 0 до 10
-            sys_judge = "Evaluate the Actual Output against the Expected Output. Return ONLY a single integer score from 0 to 10."
-            user_judge = f"Expected: {data['expected_output']}\nActual: {actual_output}"
+            sys_judge = config.EVALUATOR_SYS_PROMPT
+            user_judge = config.EVALUATOR_USER_TEMPLATE.format(
+                expected=data['expected_output'], 
+                actual=actual_output
+            )
             
             score_str = self.judge.generate(sys_judge, user_judge, temperature=0.0)
             try:

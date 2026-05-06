@@ -3,6 +3,7 @@ from typing import Dict, Any
 from .llm_engine import RobustLLMEngine
 from .synthetics import DataGenerator, Evaluator
 from .mutators import PromptMutator
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,11 @@ class FullPromptTuner:
         self.mutator = PromptMutator(self.sys_engine)
 
     def run(self, start_prompt: str, ch_lim: int, method: str = 'hype', epochs: int = 1) -> Dict[str, Any]:
-        logger.info(f"Запуск FullPromptTuner. Метод: {method}, Лимит: {ch_lim}")
-        
+        # 1. Анализ задачи и генерация данных
         # 1. Анализ задачи и генерация данных
         logger.info("Извлечение сути задачи...")
-        task_desc = self.sys_engine.generate("Extract the core objective from the prompt in 2 sentences.", start_prompt)
-        test_data = self.data_gen.generate_samples(task_desc, num_samples=2)
+        task_desc = self.sys_engine.generate(config.EXTRACT_OBJECTIVE_PROMPT, start_prompt)
+        test_data = self.data_gen.generate_samples(task_desc, num_samples=config.NUM_TEST_SAMPLES)
 
         current_prompt = start_prompt
         init_metric = self.evaluator.score_prompt(current_prompt, test_data)

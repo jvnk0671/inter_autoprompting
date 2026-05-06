@@ -2,8 +2,31 @@ import os
 import sys
 import json
 from typing import Any
-
+import logging
 import config
+import warnings
+
+if getattr(config, 'SILENT_MODE', False):
+    # CRITICAL + 1 означает, что мы блокируем вообще ВСЕ системные сообщения
+    logging.disable(logging.CRITICAL)
+    warnings.filterwarnings('ignore')
+
+class HiddenPrints:
+    """Контекстный менеджер для перехвата абсолютно всех принтов и ошибок от библиотек."""
+    def __enter__(self):
+        self._original_stdout = sys.stdout
+        self._original_stderr = sys.stderr
+        if getattr(config, 'SILENT_MODE', False):
+            sys.stdout = open(os.devnull, 'w')  # Направляем стандартный вывод в никуда
+            sys.stderr = open(os.devnull, 'w')  # Направляем поток ошибок в никуда
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if getattr(config, 'SILENT_MODE', False):
+            sys.stdout.close()
+            sys.stderr.close()
+            sys.stdout = self._original_stdout
+            sys.stderr = self._original_stderr
+# -----------------------------
 
 # =================================================================
 # БЛОК 1: ЖЕСТКАЯ ХИРУРГИЯ БИБЛИОТЕК (MONKEY PATCHING)
@@ -90,7 +113,8 @@ except Exception:
 def promptomatix_optimize(prompt: str, model: str, ch_lim: int, system_model: str) -> dict[str, str | Any]:
     
     if config.USE_CUSTOM_TUNER:
-        print("\n🚀 Используем бронебойный кастомный движок (my_promptomatix)...")
+        if not getattr(config, 'SILENT_MODE', False):
+            print("\n🚀 Используем бронебойный кастомный движок (my_promptomatix)...")
         from my_promptomatix.tuner import FullPromptTuner
         
         tuner = FullPromptTuner(target_model=model, system_model=system_model)
@@ -107,11 +131,12 @@ def promptomatix_optimize(prompt: str, model: str, ch_lim: int, system_model: st
         }
         
     else:
-        print("\n🐌 Используем официальную библиотеку Salesforce...")
+        if not getattr(config, 'SILENT_MODE', False):
+            print("\n🐌 Используем официальную библиотеку Salesforce...")
         from promptomatix.main import process_input
         
-        task_instruction = f"Strict limitation: the final prompt must not exceed {ch_lim} characters. Loss of meaning is unacceptable. Prompt to optimize: {prompt}"
-        
+        task_instruction = config.WRAPPER_TASK_TEMPLATE.format(ch_lim=ch_lim, prompt=prompt)
+
         safe_model_name = system_model
         if not safe_model_name.startswith("openrouter/"):
             safe_model_name = f"openrouter/{safe_model_name}"
@@ -131,7 +156,9 @@ def promptomatix_optimize(prompt: str, model: str, ch_lim: int, system_model: st
         }
         
         try:
-            result = process_input(**setup_config)
+            with HiddenPrints():
+                result = process_input(**setup_config)
+            
             if result and 'result' in result:
                 optimized = result['result']
             else:
