@@ -1,10 +1,9 @@
 import logging
-from typing import Any, Optional
 from transformers import AutoTokenizer
-
-from functools import lru_cache
-from dataclasses import dataclass
+from typing import Any, Optional
 from abc import ABC, abstractmethod
+
+from pipeline import OptimizationResult
 import promptomatix_wrapper
 from cool_prompt import coolprompt_optimize
 
