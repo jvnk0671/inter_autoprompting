@@ -28,8 +28,6 @@ def _fallback(prompt: str, ch_lim: int) -> str:
 
 
 def coolprompt_optimize(prompt: str, model: str, ch_lim: int) -> str:
-    if not KEY or hype_optimizer is None or ChatOpenAI is None:
-        return _fallback(prompt, ch_lim)
 
     system_llm = ChatOpenAI(
         openai_api_key=KEY,
@@ -38,15 +36,14 @@ def coolprompt_optimize(prompt: str, model: str, ch_lim: int) -> str:
     )
     problem_description = (
         f"Strict limitation: the final prompt must not exceed {ch_lim} characters. "
-        "Loss of meaning is unacceptable."
+        f"Loss of meaning is unacceptable."
     )
 
-    optimized = hype_optimizer(
-        model=system_llm,
-        prompt=prompt,
-        problem_description=problem_description,
+    optimized_hype = hype_optimizer(
+        model=system_llm, prompt=prompt, problem_description=problem_description
     )
-    return str(optimized)
+
+    return optimized_hype
 
 
 if __name__ == "__main__":

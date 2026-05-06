@@ -106,27 +106,26 @@ def _fallback_cut(prompt: str, ch_limit: int) -> str:
 
 
 def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
-    if ch_limit <= 0:
-        return ""
-
-    max_limit = ch_limit + max(0, uncertainty)
+    """Прямая обрезка промпта со слегка щадящей погрешностью и приоритетом обрезания символов"""
+    max_limit = uncertainty + ch_limit
     if len(prompt) <= max_limit:
-        return prompt.rstrip(" ")
+        return prompt
 
-    min_limit = max(0, ch_limit - max(0, uncertainty))
+    min_limit = max(0, ch_limit - uncertainty)
     cut = prompt[:max_limit]
+
     markers_prior = [["\n"], [".", "!", "?"], [",", ";"], [" "]]
 
-    for markers in markers_prior:
-        further_idx = max(cut.rfind(marker) for marker in markers)
+    for i in markers_prior:
+        further_idx = max(cut.rfind(t) for t in i)
         if further_idx >= min_limit:
             return cut[: further_idx + 1].rstrip(" ")
 
     space = cut.rfind(" ")
-    if space >= min_limit:
-        return cut[:space].rstrip(" ")
+    if space != -1:
+        return cut[:space]
 
-    return cut.rstrip(" ")
+    return cut
 
 
 class Pipeline:
