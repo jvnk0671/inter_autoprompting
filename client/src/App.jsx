@@ -149,11 +149,6 @@ const RefinedPromptingService = () => {
               <CustomSelect label="модель" value={llm} options={llmOptions} onChange={setLlm} />
               <CustomSelect label="метод" value={method} options={methodOptions} onChange={setMethod} />
             </div>
-
-            {method === 'coolprompt' && (
-              <div className="p-4 bg-gray-900/30 rounded-xl border border-gray-800/50 space-y-4 animate-in fade-in slide-in-from-top-2">
-              </div>
-            )}
           </div>
 
           <div className="bg-gray-900 rounded-xl border border-gray-700 focus-within:border-indigo-500 transition-all overflow-hidden shadow-2xl">
