@@ -63,8 +63,6 @@ const RefinedPromptingService = () => {
   const [llm, setLlm] = useState('gpt-4');
   const [method, setMethod] = useState('example');
   const [coolMode, setCoolMode] = useState('hype');
-  const [targetModel, setTargetModel] = useState('meta-llama/llama-3.3-70b-instruct');
-  const [systemModel, setSystemModel] = useState('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
   const [inputPrompt, setInputPrompt] = useState('');
   const [maxLength, setMaxLength] = useState(300);
   const [outputPrompt, setOutputPrompt] = useState('');
@@ -72,11 +70,6 @@ const RefinedPromptingService = () => {
 
   const llmOptions = [{ value: 'gpt-4', label: 'GPT-4 Turbo' }, { value: 'claude-3', label: 'Claude 3.5' }];
   const methodOptions = [{ value: 'example', label: 'Example' }, { value: 'coolprompt', label: 'CoolPrompt' }, { value: 'promptomatix', label: 'Promptomatix' }];
-  const coolModeOptions = [{ value: 'hype', label: 'Hype' }, { value: 'distill', label: 'Distill' }];
-  const advancedModelOptions = [
-    { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B' },
-    { value: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', label: 'Nemotron 3 Nano' }
-  ];
 
   const handleOptimize = async () => {
     if (!inputPrompt.trim()) return;
@@ -92,8 +85,6 @@ const RefinedPromptingService = () => {
           method,
           ch_limit: Number(maxLength),
           uncertainty: 20,
-          target_model: targetModel,
-          system_model: systemModel,
         }),
       });
 
@@ -112,7 +103,7 @@ const RefinedPromptingService = () => {
 
   return (
     <div className="flex h-screen bg-gray-950 font-sans text-gray-200 overflow-hidden">
-      
+
       <aside className="w-60 bg-gray-950 border-r border-gray-800 flex flex-col flex-shrink-0">
         <div className="p-4"><button className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-900 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors text-[10px] font-bold"><Plus size={14} /> NEW CHAT</button></div>
         <div className="flex-1 overflow-y-auto px-3 space-y-1">
@@ -128,16 +119,16 @@ const RefinedPromptingService = () => {
         <header className="h-14 border-b border-gray-800 flex items-center px-6">
           <h2 className="text-sm font-semibold text-gray-400">Чат: {chats.find(c => c.id === activeChatId)?.title}</h2>
         </header>
-        
+
         <div className="flex-1 overflow-y-auto p-6 space-y-4 text-sm">
           <div className="max-w-2xl mx-auto opacity-30 text-center mt-20 italic">Здесь будет история вашего диалога...</div>
         </div>
 
         <div className="p-6 border-t border-gray-800 bg-gray-950/50">
           <div className="max-w-3xl mx-auto relative">
-            <input 
-              type="text" 
-              placeholder="Спросить о..." 
+            <input
+              type="text"
+              placeholder="Спросить о..."
               className="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 px-4 pr-12 outline-none focus:border-indigo-500 transition-all text-sm"
             />
             <button className="absolute right-3 top-2.5 p-1 text-indigo-500 hover:text-indigo-400">
@@ -161,11 +152,6 @@ const RefinedPromptingService = () => {
 
             {method === 'coolprompt' && (
               <div className="p-4 bg-gray-900/30 rounded-xl border border-gray-800/50 space-y-4 animate-in fade-in slide-in-from-top-2">
-                <CustomSelect label="Режим CoolPrompt" value={coolMode} options={coolModeOptions} onChange={setCoolMode} />
-                <div className="flex gap-3">
-                  <CustomSelect label="Target Model" value={targetModel} options={advancedModelOptions} onChange={setTargetModel} />
-                  <CustomSelect label="System Model" value={systemModel} options={advancedModelOptions} onChange={setSystemModel} hint="(рек: llama)" />
-                </div>
               </div>
             )}
           </div>
