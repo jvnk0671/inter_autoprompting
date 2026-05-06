@@ -47,9 +47,9 @@ class ExampleOptimiser(PromptOptimizer):
 
 
 class PromptomatixOptimizer(PromptOptimizer):
-    def __init__(self, target_model: str, system_model: str, use_custom: bool = True):
-        self.target_model = target_model
-        self.system_model = system_model
+    def __init__(self, model: str = std_sys_model2, use_custom=False):
+        self.target_model = model
+        self.system_model = model
         self.use_custom = use_custom
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
@@ -60,11 +60,7 @@ class PromptomatixOptimizer(PromptOptimizer):
             system_model=self.system_model,
             ch_lim=ch_lim,
         )
-        return OptimizationResult(
-            optimized_prompt=result["optimized_prompt"],
-            init_metric=result.get("init_metric", 0.0),
-            final_metric=result.get("final_metric", 0.0),
-        )
+        return OptimizationResult()
 
 
 @lru_cache(maxsize=4)
