@@ -31,7 +31,13 @@ class Evaluator:
             safe_input = str(data.get('input', 'Test input'))
             safe_expected = str(data.get('expected_output', ''))
             actual_output = self.target.generate(prompt, safe_input)
-            sys_judge = "Evaluate the Actual Output against the Expected Output. Return ONLY a single integer score from 0 to 10."
+            sys_judge = (
+                "You are an expert evaluator. Compare the 'Actual Output' against the 'Expected Output'. "
+                "Focus ONLY on whether the core goal and logic are achieved. IGNORE differences in formatting, "
+                "markdown, conversational filler, tone, or exact wording. "
+                "If the Actual Output successfully solves the same problem as Expected Output, give a high score (8-10). "
+                "Return ONLY a single integer from 0 to 10. No text, no explanations."
+            )
             user_judge = f"Expected: {safe_expected}\nActual: {actual_output}"
             score_str = self.judge.generate(sys_judge, user_judge, temperature=0.0)
             try:

@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 std_sys_model = "meta-llama/llama-3.3-70b-instruct"
-std_sys_model2 = "inclusionai/ling-2.6-1t"
+std_sys_model2 = "tencent/hy3-preview"
 reasoning_trg_model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
 
@@ -139,18 +139,29 @@ class Pipeline:
         if translate:
             from my_promptomatix.llm_engine import RobustLLMEngine
             s_eng = RobustLLMEngine(self.sys_model)
-            
-            lang_prompt = "Identify the language of the user's text. Return ONLY the language name in English (e.g., Russian, Spanish, Chinese). Do not write any other words."
+            lang_prompt = (
+                "Identify the HUMAN language of the user's text. "
+                "Return ONLY the human language name in English (e.g., Russian, Spanish, English). "
+                "CRITICAL: Do NOT write 'Python', 'C++', or 'SQL'. If the text is in Russian but mentions Python, the language is Russian. "
+                "Do not write any other words."
+            )
             original_lang = s_eng.generate(lang_prompt, prompt, temperature=0.1).strip().capitalize()
             
             if "English" not in original_lang:
-                trans_to_eng = "You are a professional translator. Translate the following text to English. Output ONLY the raw translated text. No markdown, no conversational text."
+                trans_to_eng = (
+                    "You are a strict translator. Translate the text to English. "
+                    "CRITICAL: Output ONLY the plain translated text. DO NOT use JSON, DO NOT use markdown code blocks, DO NOT add explanations."
+                )
                 working_prompt = s_eng.generate(trans_to_eng, prompt, temperature=0.1)
         
         res = self.optimizer.optimize(working_prompt, ch_limit)
     
         if translate and "English" not in original_lang and s_eng:
-            trans_back = f"You are a professional translator. Translate the following text to {original_lang}. Output ONLY the raw translated text. No markdown, no conversational text."
+            logger.info(f"Переводим улучшенный промпт обратно на {original_lang}...")
+            trans_back = (
+                f"You are a strict translator. Translate the text to {original_lang}. "
+                "CRITICAL: Output ONLY the plain translated text. DO NOT use JSON, DO NOT use markdown code blocks, DO NOT add explanations."
+            )
             res.optimized_prompt = s_eng.generate(trans_back, res.optimized_prompt, temperature=0.1)
         res.optimized_prompt = radical_cut(res.optimized_prompt, ch_limit, uncertainty)
         res.init_tokens = token_counter(prompt, self.sys_model)
