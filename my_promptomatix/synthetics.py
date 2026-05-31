@@ -1,16 +1,15 @@
 import logging
+import re
 from typing import List, Dict, Any
 from .llm_engine import RobustLLMEngine
 
 logger = logging.getLogger(__name__)
 
 class DataGenerator:
-    """Генерация синтетических данных для тестирования промпта."""
     def __init__(self, engine: RobustLLMEngine):
         self.engine = engine
 
     def generate_samples(self, task_description: str, num_samples: int = 3) -> List[Dict[str, str]]:
-        logger.info(f"Генерация {num_samples} тестовых примеров...")
         sys_prompt = (
             f"You are a data generator. Create {num_samples} diverse testing examples for the following task. "
             f"Output must be a JSON array of objects with keys 'input' and 'expected_output'."
@@ -19,7 +18,6 @@ class DataGenerator:
         return samples if samples else []
 
 class Evaluator:
-    """LLM-as-a-judge: оценивает, насколько хорошо работает текущий промпт."""
     def __init__(self, target_engine: RobustLLMEngine, judge_engine: RobustLLMEngine):
         self.target = target_engine
         self.judge = judge_engine
@@ -30,19 +28,18 @@ class Evaluator:
         
         total_score = 0.0
         for data in test_data:
-            # 1. Заставляем целевую модель ответить на вопрос, используя тестируемый промпт
-            actual_output = self.target.generate(prompt, data['input'])
-            
-            # 2. Судья оценивает ответ от 0 до 10
+            safe_input = str(data.get('input', 'Test input'))
+            safe_expected = str(data.get('expected_output', ''))
+            actual_output = self.target.generate(prompt, safe_input)
             sys_judge = "Evaluate the Actual Output against the Expected Output. Return ONLY a single integer score from 0 to 10."
-            user_judge = f"Expected: {data['expected_output']}\nActual: {actual_output}"
-            
+            user_judge = f"Expected: {safe_expected}\nActual: {actual_output}"
             score_str = self.judge.generate(sys_judge, user_judge, temperature=0.0)
             try:
-                digits = "".join(filter(str.isdigit, score_str))
-                score = int(digits) if digits else 5
+                import re
+                match = re.search(r'\b([0-9]|10)\b', score_str)
+                score = int(match.group(1)) if match else 5
                 total_score += min(max(score, 0), 10) / 10.0
             except:
-                total_score += 0.5 # Средний балл при ошибке парсинга
+                total_score += 0.5
 
         return total_score / len(test_data)

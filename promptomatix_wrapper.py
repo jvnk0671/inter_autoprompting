@@ -9,7 +9,6 @@ load_dotenv()
 KEY = os.getenv("OPENROUTER_API_KEY")
 USE_CUSTOM_TUNER = True
 
-
 def _configure_openrouter() -> None:
     if not KEY:
         return
@@ -20,16 +19,11 @@ def _configure_openrouter() -> None:
 
     try:
         import litellm
-
         _orig_litellm_comp = litellm.completion
 
         def _patched_litellm_comp(*args, **kwargs):
-            kwargs["max_tokens"] = 1500
             if "api_base" in kwargs:
                 kwargs["api_base"] = "https://openrouter.ai/api/v1"
-            m = str(kwargs.get("model", ""))
-            if "gpt" in m:
-                kwargs["model"] = "openrouter/inclusionai/ling-2.6-1t:free"
             return _orig_litellm_comp(*args, **kwargs)
 
         litellm.completion = _patched_litellm_comp
@@ -53,20 +47,15 @@ def _configure_openrouter() -> None:
             _orig_create = openai.resources.chat.completions.Completions.create
 
             def _patched_create(self, *args, **kwargs):
-                kwargs["model"] = "meta-llama/llama-3.3-70b-instruct"
                 response = _orig_create(self, *args, **kwargs)
                 if hasattr(response, "choices"):
                     for choice in response.choices:
-                        if hasattr(choice, "message") and hasattr(
-                            choice.message, "content"
-                        ):
+                        if hasattr(choice, "message") and hasattr(choice.message, "content"):
                             content = choice.message.content
                             if content is None:
                                 choice.message.content = ""
                             elif isinstance(content, dict) or isinstance(content, list):
-                                choice.message.content = json.dumps(
-                                    content, ensure_ascii=False
-                                )
+                                choice.message.content = json.dumps(content, ensure_ascii=False)
                             else:
                                 choice.message.content = str(content)
                 return response
@@ -76,15 +65,7 @@ def _configure_openrouter() -> None:
         pass
 
 
-ROOT_PATH = Path(__file__).resolve().parent
-LIB_PATH = ROOT_PATH / "promptomatix" / "src"
-if str(LIB_PATH) not in sys.path:
-    sys.path.append(str(LIB_PATH))
-if str(ROOT_PATH) not in sys.path:
-    sys.path.append(str(ROOT_PATH))
-
 _configure_openrouter()
-
 
 def _fallback(prompt: str, ch_lim: int) -> str:
     text = " ".join(prompt.split())
@@ -92,18 +73,14 @@ def _fallback(prompt: str, ch_lim: int) -> str:
         return text
     return text[:ch_lim].rsplit(" ", 1)[0] or text[:ch_lim]
 
-
 def _safe_model_name(system_model: str) -> str:
     if system_model.startswith("openrouter/"):
         return system_model
     return f"openrouter/{system_model}"
 
 
-# =================================================================
-# БЛОК 2: ГЛАВНАЯ ФУНКЦИЯ-ОБЕРТКА
-# =================================================================
 def promptomatix_optimize(
-    prompt: str, model: str, ch_lim: int, system_model: str
+    prompt: str, model: str, ch_lim: int, system_model: str, use_custom_tuner: bool = True
 ) -> dict[str, str | Any]:
     if not KEY:
         return {
@@ -112,47 +89,29 @@ def promptomatix_optimize(
             "final_metric": "fallback: OPENROUTER_API_KEY is not set",
         }
 
-    if USE_CUSTOM_TUNER:
+    if use_custom_tuner:
         try:
-            print("\n🚀 Используем бронебойный кастомный движок (my_promptomatix)...")
             from my_promptomatix.tuner import FullPromptTuner
 
-            # Запуск твоего оркестратора[cite: 13]
             tuner = FullPromptTuner(target_model=model, system_model=system_model)
             result = tuner.run(
                 start_prompt=prompt, ch_lim=ch_lim, method="hype", epochs=1
             )
             return {
-                "optimized_prompt": result.get(
-                    "optimized_prompt", _fallback(prompt, ch_lim)
-                ),
+                "optimized_prompt": result.get("optimized_prompt", _fallback(prompt, ch_lim)),
                 "init_metric": result.get("init_metric"),
                 "final_metric": result.get("final_metric"),
             }
         except Exception as custom_exc:
-            custom_error = custom_exc
-    else:
-        custom_error = None
-
+            print(f"Ошибка в кастомном тюнере: {custom_exc}")
+            
     try:
-        print("\n🐌 Используем официальную библиотеку Salesforce...")
         from promptomatix.main import process_input
 
         task_instruction = f"Strict limitation: the final prompt must not exceed {ch_lim} characters. Loss of meaning is unacceptable. Prompt to optimize: {prompt}"
         safe_model_name = _safe_model_name(system_model)
-
-        # config = {
-        #     "raw_input": task_instruction,
-        #     "model_name": safe_model_name,
-        #     "model_api_key": KEY,
-        #     "model_provider": "openai",
-        #     "backend": "simple_meta_prompt",
-        #     "synthetic_data_size": 1,
-        #     "task_type": "generation",
-        #     "max_tokens": 300,
-        #     "api_base": "https://openrouter.ai/api/v1"
-        # }
-
+        
+        dynamic_max_tokens = max(300, int(ch_lim))  
         config = {
             "raw_input": task_instruction,
             "model_name": safe_model_name,
@@ -163,19 +122,24 @@ def promptomatix_optimize(
             "synthetic_data_size": 1,
             "train_ratio": 0.99,
             "temperature": 0.1,
-            "max_tokens": 300,
+            "max_tokens": dynamic_max_tokens,
             "api_base": "https://openrouter.ai/api/v1",
         }
 
         result = process_input(**config)
         optimized = result.get("result") if isinstance(result, dict) else None
-        if not optimized:
+        
+        if optimized:
+            optimized = optimized.replace("<optimized_prompt>", "").replace("</optimized_prompt>", "").strip()
+        else:
             optimized = f"Optimization failed silently. Library returned: {result}"
 
         return {"optimized_prompt": optimized, "init_metric": 0.0, "final_metric": 0.0}
+
     except Exception as official_exc:
+        print(f"\nОШИБКА БИБЛИОТЕКИ PROMPTOMATIX:\n{official_exc}", flush=True)
         return {
             "optimized_prompt": _fallback(prompt, ch_lim),
             "init_metric": None,
-            "final_metric": f"fallback: custom promptomatix failed: {custom_error}; official promptomatix failed: {official_exc}",
+            "final_metric": f"fallback: {official_exc}",
         }

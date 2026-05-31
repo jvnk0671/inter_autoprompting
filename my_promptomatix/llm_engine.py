@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 class RobustLLMEngine:
-    """Бронебойный клиент для OpenRouter с умным парсингом и retry-логикой."""
     
     def __init__(self, model_name: str):
         self.model_name = model_name
@@ -23,8 +22,7 @@ class RobustLLMEngine:
         )
 
     def generate(self, system_prompt: str, user_prompt: str, temperature: float = 0.3) -> str:
-        """Отправка запроса с защитой от 429 (Rate Limit) и 402 (Лимит баланса)."""
-        max_retries = 5
+        max_retries = 3
         for attempt in range(max_retries):
             try:
                 response = self.client.chat.completions.create(
@@ -39,27 +37,36 @@ class RobustLLMEngine:
             except Exception as e:
                 err_str = str(e).lower()
                 if "429" in err_str:
-                    wait = (attempt + 1) * 10
-                    logger.warning(f"[{self.model_name}] Лимит запросов. Ждем {wait} сек...")
+                    wait = 2 ** attempt
+                    logger.warning(f"[{self.model_name}] лимит запросов жди {wait} сек...")
                     time.sleep(wait)
                 elif "402" in err_str or "404" in err_str:
-                    logger.error(f"[{self.model_name}] Фатальная ошибка модели: {e}. Смените модель.")
+                    logger.error(f"[{self.model_name}] ошибка модели: {e}")
                     raise e
                 else:
-                    logger.error(f"[{self.model_name}] Неизвестная ошибка: {e}")
-                    time.sleep(5)
+                    logger.error(f"[{self.model_name}] ошибка: {e}")
+                    if attempt == max_retries - 1:
+                        raise e
+                    time.sleep(1)
         return ""
 
     def generate_json(self, system_prompt: str, user_prompt: str) -> Optional[List[Dict[str, Any]]]:
-        """Умный метод для извлечения данных без использования платного JSON Mode."""
         system_prompt += "\n\nCRITICAL: Return ONLY valid JSON array. No markdown blocks, no intro, no outro."
         raw_text = self.generate(system_prompt, user_prompt, temperature=0.1)
         
-        # Извлекаем JSON даже если модель обернула его в markdown ```json ...
-        json_match = re.search(r'\[.*\]', raw_text.replace('\n', ' '), re.IGNORECASE | re.DOTALL)
-        if json_match:
+        json_match_array = re.search(r'\[.*\]', raw_text.replace('\n', ' '), re.IGNORECASE | re.DOTALL)
+        if json_match_array:
             try:
-                return json.loads(json_match.group(0))
+                return json.loads(json_match_array.group(0))
             except json.JSONDecodeError:
                 pass
+            
+        json_match_obj = re.search(r'\{.*\}', raw_text.replace('\n', ' '), re.IGNORECASE | re.DOTALL)
+        if json_match_obj:
+            try:
+                obj = json.loads(json_match_obj.group(0))
+                return [obj]
+            except json.JSONDecodeError:
+                pass
+                
         return None

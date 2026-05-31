@@ -10,8 +10,8 @@ from cool_prompt import coolprompt_optimize
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-std_sys_model = "meta-llama/llama-3.3-70b-instruct:free"
-std_sys_model2 = "inclusionai/ling-2.6-1t:free"
+std_sys_model = "meta-llama/llama-3.3-70b-instruct"
+std_sys_model2 = "inclusionai/ling-2.6-1t"
 reasoning_trg_model = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
 
@@ -20,6 +20,8 @@ class OptimizationResult:
     optimized_prompt: str
     init_tokens: Optional[int] = None
     final_tokens: Optional[int] = None
+    init_score: Optional[float] = None 
+    final_score: Optional[float] = None 
 
 
 class PromptOptimizer(ABC):
@@ -61,17 +63,17 @@ class PromptomatixOptimizer(PromptOptimizer):
         self.use_custom = use_custom
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
-        promptomatix_wrapper.USE_CUSTOM_TUNER = self.use_custom
         result = promptomatix_wrapper.promptomatix_optimize(
             prompt=prompt,
             model=self.target_model,
             system_model=self.system_model,
             ch_lim=ch_lim,
+            use_custom_tuner=self.use_custom
         )
         return OptimizationResult(
-            optimized_prompt=str(
-                result.get("optimized_prompt", _fallback_cut(prompt, ch_lim))
-            )
+            optimized_prompt=str(result.get("optimized_prompt", _fallback_cut(prompt, ch_lim))),
+            init_score=result.get("init_metric"),  
+            final_score=result.get("final_metric") 
         )
 
 
@@ -79,13 +81,8 @@ class PromptomatixOptimizer(PromptOptimizer):
 def get_tokenizer(model: str):
     try:
         from transformers import AutoTokenizer
-
-        logger.info("Getting tokenizer...")
         return AutoTokenizer.from_pretrained(model)
-    except Exception as exc:
-        logger.warning(
-            "Tokenizer is unavailable (%s). Using rough token estimate.", exc
-        )
+    except Exception:
         return None
 
 
@@ -106,7 +103,6 @@ def _fallback_cut(prompt: str, ch_limit: int) -> str:
 
 
 def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
-    """Прямая обрезка промпта со слегка щадящей погрешностью и приоритетом обрезания символов"""
     max_limit = uncertainty + ch_limit
     if len(prompt) <= max_limit:
         return prompt
@@ -129,31 +125,53 @@ def radical_cut(prompt: str, ch_limit: int, uncertainty: int) -> str:
 
 
 class Pipeline:
-    def __init__(self, optimizer: PromptOptimizer, model: str):
+    def __init__(self, optimizer: PromptOptimizer, sys_model: str, target_model: str):
         self.optimizer = optimizer
-        self.model = model
+        self.sys_model = sys_model
+        self.target_model = target_model
 
-    def run(self, prompt: str, ch_limit: int, uncertainty: int) -> OptimizationResult:
-        logger.info("Prompt to optimize: %s", prompt)
-        res = self.optimizer.optimize(prompt, ch_limit)
+    def run(self, prompt: str, ch_limit: int, uncertainty: int, evaluate: bool = False, translate: bool = False) -> OptimizationResult:
+        
+        working_prompt = prompt
+        original_lang = "English"
+        s_eng = None
+        
+        if translate:
+            from my_promptomatix.llm_engine import RobustLLMEngine
+            s_eng = RobustLLMEngine(self.sys_model)
+            
+            lang_prompt = "Identify the language of the user's text. Return ONLY the language name in English (e.g., Russian, Spanish, Chinese). Do not write any other words."
+            original_lang = s_eng.generate(lang_prompt, prompt, temperature=0.1).strip().capitalize()
+            
+            if "English" not in original_lang:
+                trans_to_eng = "You are a professional translator. Translate the following text to English. Output ONLY the raw translated text. No markdown, no conversational text."
+                working_prompt = s_eng.generate(trans_to_eng, prompt, temperature=0.1)
+        
+        res = self.optimizer.optimize(working_prompt, ch_limit)
+    
+        if translate and "English" not in original_lang and s_eng:
+            trans_back = f"You are a professional translator. Translate the following text to {original_lang}. Output ONLY the raw translated text. No markdown, no conversational text."
+            res.optimized_prompt = s_eng.generate(trans_back, res.optimized_prompt, temperature=0.1)
         res.optimized_prompt = radical_cut(res.optimized_prompt, ch_limit, uncertainty)
-        res.init_tokens = token_counter(prompt, self.model)
-        res.final_tokens = token_counter(res.optimized_prompt, self.model)
+        res.init_tokens = token_counter(prompt, self.sys_model)
+        res.final_tokens = token_counter(res.optimized_prompt, self.sys_model)
+        if evaluate:
+            if s_eng is None:
+                from my_promptomatix.llm_engine import RobustLLMEngine
+                s_eng = RobustLLMEngine(self.sys_model)
+            from my_promptomatix.synthetics import DataGenerator, Evaluator
+            
+            t_eng = RobustLLMEngine(self.target_model)
+            
+            task_desc = s_eng.generate("Extract the core objective from the prompt in 2 sentences.", prompt)
+            test_data = DataGenerator(s_eng).generate_samples(task_desc, num_samples=2)
+            
+            evaluator = Evaluator(t_eng, s_eng)
+            res.init_score = evaluator.score_prompt(prompt, test_data)
+            res.final_score = evaluator.score_prompt(res.optimized_prompt, test_data)
 
         logger.info(
-            "Optimized successfully! %s -> %s", res.init_tokens, res.final_tokens
+            "Optimized! Tokens: %s -> %s | Score: %s -> %s", 
+            res.init_tokens, res.final_tokens, res.init_score, res.final_score
         )
         return res
-
-
-if __name__ == "__main__":
-    prompt_test = (
-        "You are a helpful mathematical assistant. Answer the question: investigate "
-        "the convergence of the integral from 1 to +inf (sin(x))^2/x"
-    )
-    pipeline = Pipeline(
-        optimizer=ExampleOptimiser(),
-        model=std_sys_model2.replace(":free", ""),
-    )
-    result = pipeline.run(prompt=prompt_test, ch_limit=40, uncertainty=35)
-    logger.info("Finally: %s", result.optimized_prompt)
