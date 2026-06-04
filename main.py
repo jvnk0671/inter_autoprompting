@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
+from evo_prompt import EvoPromptOptimizer
 
 from autoprompting import (
     CoolPromptOptimizer,
@@ -52,6 +53,14 @@ def optimize(req: OptimizeRequest):
         optimizer = PromptomatixOptimizer(target_model=req.target_model, system_model=req.system_model)
     elif req.method == "example":
         optimizer = ExampleOptimiser()
+    elif req.method == "evoprompt":
+        optimizer = EvoPromptOptimizer(
+            target_model=req.target_model,
+            system_model=req.system_model,
+            pop_size=5,
+            generations=3,
+            eval_samples=3
+        )
     else:
         raise HTTPException(status_code=400, detail=f"Unknown method: {req.method}")
 
