@@ -62,11 +62,14 @@ const RefinedPromptingService = () => {
 
   const [llm, setLlm] = useState('gpt-4');
   const [method, setMethod] = useState('example');
-  const [coolMode, setCoolMode] = useState('hype');
   const [inputPrompt, setInputPrompt] = useState('');
   const [maxLength, setMaxLength] = useState(300);
   const [outputPrompt, setOutputPrompt] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
+  
+  const [translate, setTranslate] = useState(false);
+  const [evaluate, setEvaluate] = useState(false);
+  const [metrics, setMetrics] = useState(null);
 
   const llmOptions = [{ value: 'gpt-4', label: 'GPT-4 Turbo' }, { value: 'claude-3', label: 'Claude 3.5' }];
   const methodOptions = [{ value: 'example', label: 'Example' }, { value: 'coolprompt', label: 'CoolPrompt' }, { value: 'promptomatix', label: 'Promptomatix' }];
@@ -75,6 +78,7 @@ const RefinedPromptingService = () => {
     if (!inputPrompt.trim()) return;
     setIsOptimizing(true);
     setOutputPrompt('');
+    setMetrics(null);
 
     try {
       const response = await fetch('http://localhost:8000/optimize', {
@@ -82,9 +86,12 @@ const RefinedPromptingService = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: inputPrompt,
-          method,
-          ch_limit: Number(maxLength),
-          uncertainty: 20,
+          method: method,
+          ch_lim: Number(maxLength),
+          target_model: llm,
+          system_model: llm,
+          evaluate: evaluate,
+          translate: translate
         }),
       });
 
@@ -94,8 +101,17 @@ const RefinedPromptingService = () => {
       }
 
       setOutputPrompt(data.optimized_prompt);
+      
+      if (data.init_score !== null && data.init_score !== undefined) {
+        setMetrics({
+          initScore: data.init_score,
+          finalScore: data.final_score,
+          initTokens: data.init_tokens,
+          finalTokens: data.final_tokens
+        });
+      }
     } catch (error) {
-      setOutputPrompt(`Ошибка: ${error.message}`);
+      setOutputPrompt(`Err: ${error.message}`);
     } finally {
       setIsOptimizing(false);
     }
@@ -160,6 +176,24 @@ const RefinedPromptingService = () => {
             />
           </div>
 
+          <div className="flex flex-col gap-3 px-1 py-1">
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input type="checkbox" className="hidden" checked={translate} onChange={(e) => setTranslate(e.target.checked)} />
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${translate ? 'bg-indigo-500 border-indigo-500' : 'bg-gray-900 border-gray-700 group-hover:border-gray-500'}`}>
+                {translate && <Check size={12} className="text-white" strokeWidth={3} />}
+              </div>
+              <span className="text-xs text-gray-400 group-hover:text-gray-200 transition-colors">English Boost</span>
+            </label>
+
+            <label className="flex items-center gap-3 cursor-pointer group">
+              <input type="checkbox" className="hidden" checked={evaluate} onChange={(e) => setEvaluate(e.target.checked)} />
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${evaluate ? 'bg-indigo-500 border-indigo-500' : 'bg-gray-900 border-gray-700 group-hover:border-gray-500'}`}>
+                {evaluate && <Check size={12} className="text-white" strokeWidth={3} />}
+              </div>
+              <span className="text-xs text-gray-400 group-hover:text-gray-200 transition-colors">LLM Judge</span>
+            </label>
+          </div>
+
           <div className="flex justify-center relative py-2">
             <button
               onClick={handleOptimize}
@@ -179,12 +213,41 @@ const RefinedPromptingService = () => {
           </div>
 
           {outputPrompt && (
-            <div className="animate-in slide-in-from-bottom-4 duration-500 bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-4 space-y-3">
-              <div className="flex justify-between items-center text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
-                <span>Результат</span>
-                <button onClick={() => navigator.clipboard.writeText(outputPrompt)} className="hover:text-white transition"><Copy size={12} /></button>
+            <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-4">
+              
+              <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between items-center text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
+                  <span>Результат</span>
+                  <button onClick={() => navigator.clipboard.writeText(outputPrompt)} className="hover:text-white transition"><Copy size={12} /></button>
+                </div>
+                <textarea readOnly value={outputPrompt} className="w-full bg-transparent text-xs text-gray-300 font-mono leading-relaxed outline-none h-24 resize-none" />
               </div>
-              <textarea readOnly value={outputPrompt} className="w-full bg-transparent text-xs text-gray-300 font-mono leading-relaxed outline-none h-24 resize-none" />
+
+              {metrics && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-gray-900/40 border border-gray-800 rounded-lg p-3 flex flex-col gap-1 text-center">
+                    <span className="text-[9px] text-gray-500 uppercase font-bold tracking-widest">До (Оценка)</span>
+                    <span className="text-lg font-mono text-gray-300">
+                      {typeof metrics.initScore === 'number' ? metrics.initScore.toFixed(2) : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="bg-gray-900/40 border border-indigo-500/30 rounded-lg p-3 flex flex-col gap-1 text-center shadow-[0_0_15px_rgba(79,70,229,0.05)]">
+                    <span className="text-[9px] text-indigo-400 uppercase font-bold tracking-widest">После (Оценка)</span>
+                    <span className="text-lg font-mono text-indigo-400 font-bold">
+                      {typeof metrics.finalScore === 'number' ? metrics.finalScore.toFixed(2) : 'N/A'}
+                    </span>
+                  </div>
+                  
+                  {(metrics.initTokens || metrics.finalTokens) && (
+                     <div className="col-span-2 bg-gray-900/40 border border-gray-800 rounded-lg p-2.5 flex justify-between items-center text-[10px] text-gray-400 font-mono uppercase tracking-wider">
+                        <span>Токены</span>
+                        <span>
+                          {metrics.initTokens || 0} <span className="mx-1 opacity-50">→</span> <span className="text-indigo-400 font-bold">{metrics.finalTokens || 0}</span>
+                        </span>
+                     </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
