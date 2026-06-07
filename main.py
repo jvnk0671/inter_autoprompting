@@ -30,6 +30,10 @@ class OptimizeRequest(BaseModel):
     evaluate: bool = False
     translate: bool = False
 
+    pop_size: Optional[int] = 5
+    generations: Optional[int] = 3
+    eval_samples: Optional[int] = 3
+
     class Config:
         populate_by_name = True
 
@@ -55,6 +59,15 @@ def optimize(req: OptimizeRequest):
         optimizer = PromptomatixOptimizer(target_model=req.target_model, system_model=req.system_model, use_custom=True)
     elif req.method == "promptomatix":
         optimizer = PromptomatixOptimizer(target_model=req.target_model, system_model=req.system_model, use_custom=False)
+    elif req.method == "evoprompt":
+        from autoprompting import EvoPromptOptimizer
+        optimizer = EvoPromptOptimizer(
+            target_model=req.target_model, 
+            system_model=req.system_model,
+            pop_size=req.pop_size,
+            generations=req.generations,
+            eval_samples=req.eval_samples
+        )
     elif req.method == "example":
         optimizer = ExampleOptimiser()
     else:

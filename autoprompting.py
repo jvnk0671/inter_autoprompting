@@ -51,6 +51,42 @@ class CoolPromptOptimizer(PromptOptimizer):
         return OptimizationResult(optimized_prompt=optimized)
 
 
+class EvoPromptOptimizer(PromptOptimizer):
+    def __init__(
+        self,
+        target_model: str = reasoning_trg_model,
+        system_model: str = std_sys_model,
+        pop_size: int = 5,
+        generations: int = 3,
+        eval_samples: int = 3,
+    ):
+        self.target_model = target_model
+        self.system_model = system_model
+        self.pop_size = pop_size
+        self.generations = generations
+        self.eval_samples = eval_samples
+
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        try:
+            from evo_prompt import EvoPromptEngine
+            engine = EvoPromptEngine(
+                target_model=self.target_model,
+                system_model=self.system_model,
+                pop_size=self.pop_size,
+                generations=self.generations,
+                eval_samples=self.eval_samples,
+            )
+            result = engine.run(prompt=prompt, ch_limit=ch_lim)
+            
+            return OptimizationResult(
+                optimized_prompt=result.get("optimized_prompt", _fallback_cut(prompt, ch_lim)),
+                init_score=result.get("init_metric"),
+                final_score=result.get("final_metric")
+            )
+        except Exception as exc:
+            logger.error(f"Ошибка в EvoPromptOptimizer: {exc}")
+            return OptimizationResult(optimized_prompt=_fallback_cut(prompt, ch_lim))
+
 class PromptomatixOptimizer(PromptOptimizer):
     def __init__(
         self,
