@@ -6,6 +6,7 @@ from typing import Optional
 
 import promptomatix_wrapper
 from cool_prompt import coolprompt_optimize
+from evo_prompt import EvoPromptEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -72,6 +73,37 @@ class PromptomatixOptimizer(PromptOptimizer):
             optimized_prompt=str(
                 result.get("optimized_prompt", _fallback_cut(prompt, ch_lim))
             )
+        )
+
+
+class EvoPromptOptimizer(PromptOptimizer):
+    def __init__(
+        self,
+        target_model: str = reasoning_trg_model,
+        system_model: str = std_sys_model,
+        pop_size: int = 5,
+        generations: int = 3,
+        eval_samples: int = 3,
+    ):
+        self.target_model = target_model
+        self.system_model = system_model
+        self.pop_size = pop_size
+        self.generations = generations
+        self.eval_samples = eval_samples
+
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        engine = EvoPromptEngine(
+            target_model=self.target_model,
+            system_model=self.system_model,
+            pop_size=self.pop_size,
+            generations=self.generations,
+            eval_samples=self.eval_samples,
+        )
+
+        result = engine.run(prompt=prompt, ch_limit=ch_lim)
+
+        return OptimizationResult(
+            optimized_prompt=result.get("optimized_prompt", _fallback_cut(prompt, ch_lim))
         )
 
 

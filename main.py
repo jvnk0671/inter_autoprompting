@@ -2,13 +2,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from evo_prompt import EvoPromptOptimizer
 
 from autoprompting import (
     CoolPromptOptimizer,
     ExampleOptimiser,
     Pipeline,
     PromptomatixOptimizer,
+    EvoPromptOptimizer
 )
 
 app = FastAPI()
@@ -29,6 +29,9 @@ class OptimizeRequest(BaseModel):
     uncertainty: int = 20
     target_model: str = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     system_model: str = "meta-llama/llama-3.3-70b-instruct:free"
+    pop_size: Optional[int] = 5
+    generations: Optional[int] = 3
+    eval_samples: Optional[int] = 3
 
 
 class OptimizeResponse(BaseModel):
@@ -57,9 +60,9 @@ def optimize(req: OptimizeRequest):
         optimizer = EvoPromptOptimizer(
             target_model=req.target_model,
             system_model=req.system_model,
-            pop_size=5,
-            generations=3,
-            eval_samples=3
+            pop_size=req.pop_size or 5,
+            generations=req.generations or 3,
+            eval_samples=req.eval_samples or 3
         )
     else:
         raise HTTPException(status_code=400, detail=f"Unknown method: {req.method}")

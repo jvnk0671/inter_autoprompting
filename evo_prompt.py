@@ -64,7 +64,7 @@ class Evaluator:
         return sum(scores) / len(scores)
 
 
-class EvoPromptOptimizer:
+class EvoPromptEngine:
     def __init__(self, target_model: str, system_model: str,
                  pop_size: int = 3, generations: int = 1, eval_samples: int = 1): # ЗАМЕНИТЬ НА 5-3-3 (это ради тестов)
         self.target_model = target_model
