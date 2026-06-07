@@ -9,8 +9,13 @@ KEY = os.getenv("OPENROUTER_API_KEY")
 
 try:
     from coolprompt.optimizer.hype import hype_optimizer
+    from coolprompt.optimizer.distill_prompt.run import distillprompt
+    from coolprompt.optimizer.reflective_prompt.run import reflectiveprompt
 except Exception:
     hype_optimizer = None
+    distillprompt = None
+    reflectiveprompt = None
+
 
 try:
     from langchain_openai import ChatOpenAI
@@ -44,6 +49,38 @@ def coolprompt_optimize(prompt: str, model: str, ch_lim: int) -> str:
     )
 
     return optimized_hype
+
+
+def coolprompt_distill_optimize(prompt: str, model: str, dataset_split: tuple, evaluator, epochs: int = 3) -> str:
+    system_llm = ChatOpenAI(
+        openai_api_key=KEY,
+        openai_api_base="https://openrouter.ai/api/v1",
+        model_name=model,
+    )
+    return distillprompt(
+        model=system_llm,
+        dataset_split=dataset_split,
+        evaluator=evaluator,
+        initial_prompt=prompt,
+        num_epochs=epochs,
+    )
+
+
+def coolprompt_reflective_optimize(prompt: str, model: str, dataset_split: tuple, evaluator, problem_description: str, epochs: int = 3) -> str:
+    system_llm = ChatOpenAI(
+        openai_api_key=KEY,
+        openai_api_base="https://openrouter.ai/api/v1",
+        model_name=model,
+    )
+    return reflectiveprompt(
+        model=system_llm,
+        dataset_split=dataset_split,
+        evaluator=evaluator,
+        problem_description=problem_description,
+        initial_prompt=prompt,
+        num_epochs=epochs,
+    )
+
 
 
 if __name__ == "__main__":

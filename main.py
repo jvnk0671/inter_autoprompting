@@ -8,6 +8,8 @@ from autoprompting import (
     ExampleOptimiser,
     Pipeline,
     PromptomatixOptimizer,
+    DistillPromptOptimizer,
+    ReflectivePromptOptimizer
 )
 
 app = FastAPI()
@@ -51,6 +53,10 @@ def optimize(req: OptimizeRequest):
 
     if req.method == "coolprompt":
         optimizer = CoolPromptOptimizer(target_model=req.target_model, system_model=req.system_model)
+    elif req.method == "distillprompt":
+        optimizer = DistillPromptOptimizer(target_model=req.target_model, system_model=req.system_model)
+    elif req.method == "reflectiveprompt":
+        optimizer = ReflectivePromptOptimizer(target_model=req.target_model, system_model=req.system_model)
     elif req.method == "my_promptomatix":
         optimizer = PromptomatixOptimizer(target_model=req.target_model, system_model=req.system_model, use_custom=True)
     elif req.method == "promptomatix":
