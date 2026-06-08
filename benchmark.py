@@ -48,7 +48,7 @@ def run_benchmark():
         results_table = []
         for cfg in test_configs:
             req = OptimizeRequest(
-                prompt=prompt, method=cfg['method'], ch_limit=2000, 
+                prompt=prompt, method=cfg['method'], 
                 target_model=model_name, system_model=model_name,
                 evaluate=False, translate=cfg['translate']
             )

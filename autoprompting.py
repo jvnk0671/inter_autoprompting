@@ -51,6 +51,71 @@ class CoolPromptOptimizer(PromptOptimizer):
         return OptimizationResult(optimized_prompt=optimized)
 
 
+class DistillPromptOptimizer(PromptOptimizer):
+    def __init__(self, target_model: str, system_model: str, epochs: int = 3):
+        self.target_model = target_model
+        self.system_model = system_model
+        self.epochs = epochs
+
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        from cool_prompt import coolprompt_distill_optimize
+        from coolprompt.evaluator import Evaluator
+        from my_promptomatix.llm_engine import RobustLLMEngine
+        from my_promptomatix.synthetics import DataGenerator
+
+        s_eng = RobustLLMEngine(self.system_model)
+        task_desc = s_eng.generate("Extract the core objective from the prompt in 2 sentences.", prompt)
+        raw_data = DataGenerator(s_eng).generate_samples(task_desc, num_samples=10)
+        inputs = [i['input'] if isinstance(i, dict) else i[0] for i in raw_data]
+        targets = [i['output'] if isinstance(i, dict) else i[1] for i in raw_data]
+        
+        mid = len(inputs) // 2
+        dataset_split = (inputs[:mid], inputs[mid:], targets[:mid], targets[mid:])
+        evaluator = Evaluator()
+
+        optimized = coolprompt_distill_optimize(
+            prompt=prompt,
+            model=self.target_model,
+            dataset_split=dataset_split,
+            evaluator=evaluator,
+            epochs=self.epochs
+        )
+        return OptimizationResult(optimized_prompt=_fallback_cut(optimized, ch_lim))
+
+class ReflectivePromptOptimizer(PromptOptimizer):
+    def __init__(self, target_model: str, system_model: str, epochs: int = 3):
+        self.target_model = target_model
+        self.system_model = system_model
+        self.epochs = epochs
+
+    def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
+        from cool_prompt import coolprompt_reflective_optimize
+        from coolprompt.evaluator import Evaluator
+        from my_promptomatix.llm_engine import RobustLLMEngine
+        from my_promptomatix.synthetics import DataGenerator
+
+        s_eng = RobustLLMEngine(self.system_model)
+        task_desc = s_eng.generate("Extract the core objective from the prompt in 2 sentences.", prompt)
+        raw_data = DataGenerator(s_eng).generate_samples(task_desc, num_samples=10)
+        
+        inputs = [i['input'] if isinstance(i, dict) else i[0] for i in raw_data]
+        targets = [i['output'] if isinstance(i, dict) else i[1] for i in raw_data]
+        
+        mid = len(inputs) // 2
+        dataset_split = (inputs[:mid], inputs[mid:], targets[:mid], targets[mid:])
+        
+        evaluator = Evaluator()
+        optimized = coolprompt_reflective_optimize(
+            prompt=prompt,
+            model=self.target_model,
+            dataset_split=dataset_split,
+            evaluator=evaluator,
+            problem_description=task_desc,
+            epochs=self.epochs
+        )
+        return OptimizationResult(optimized_prompt=_fallback_cut(optimized, ch_lim))
+
+
 class EvoPromptOptimizer(PromptOptimizer):
     def __init__(
         self,

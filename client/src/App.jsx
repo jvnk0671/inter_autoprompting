@@ -55,6 +55,7 @@ const CustomSelect = ({ label, value, options, onChange, hint }) => {
 const RefinedPromptingService = () => {
   const [llm, setLlm] = useState('gpt-4');
   const [method, setMethod] = useState('example');
+  const [coolpromptSubMethod, setCoolpromptSubMethod] = useState('hype');
   const [inputPrompt, setInputPrompt] = useState('');
   const [maxLength, setMaxLength] = useState(300);
   const [outputPrompt, setOutputPrompt] = useState('');
@@ -68,6 +69,14 @@ const RefinedPromptingService = () => {
 
   const llmOptions = [{ value: 'gpt-4', label: 'GPT-4 Turbo' }, { value: 'claude-3', label: 'Claude 3.5' }, { value: 'free', label: 'Free'}];
   const methodOptions = [{ value: 'example', label: 'Example' }, { value: 'coolprompt', label: 'CoolPrompt' }, { value: 'promptomatix', label: 'Promptomatix' }];
+  
+  const coolpromptOptions = [
+    { value: 'hype', label: 'сокращение (hype)' },
+    { value: 'reflective', label: 'оптимизация (reflective)' },
+    { value: 'distill', label: 'оптимизация (distill)' }
+  ];
+
+  const shouldHideSlider = method === 'coolprompt' && (coolpromptSubMethod === 'reflective' || coolpromptSubMethod === 'distill');
 
   const handleOptimize = async () => {
     if (!inputPrompt.trim()) return;
@@ -82,6 +91,7 @@ const RefinedPromptingService = () => {
         body: JSON.stringify({
           prompt: inputPrompt,
           method: method,
+          sub_method: method === 'coolprompt' ? coolpromptSubMethod : null,
           ch_lim: Number(maxLength),
           target_model: llm,
           system_model: llm,
@@ -129,9 +139,22 @@ const RefinedPromptingService = () => {
               onChange={(e) => setApiKey(e.target.value)}
             />
 
-            <div className="flex gap-3">
-              <CustomSelect label="модель" value={llm} options={llmOptions} onChange={setLlm} />
-              <CustomSelect label="метод" value={method} options={methodOptions} onChange={setMethod} />
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <CustomSelect label="модель" value={llm} options={llmOptions} onChange={setLlm} />
+                <CustomSelect label="метод" value={method} options={methodOptions} onChange={setMethod} />
+              </div>
+
+              {method === 'coolprompt' && (
+                <div className="flex animate-in fade-in slide-in-from-top-2 duration-200">
+                  <CustomSelect 
+                    label="режим coolprompt" 
+                    value={coolpromptSubMethod} 
+                    options={coolpromptOptions} 
+                    onChange={setCoolpromptSubMethod} 
+                  />
+                </div>
+              )}
             </div>
           </div>
 
@@ -172,17 +195,18 @@ const RefinedPromptingService = () => {
             </button>
           </div>
 
-          <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800 space-y-3">
-            <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase">
-              <span>Макс. длина</span>
-              <span className="text-indigo-400 font-mono">{maxLength} ch.</span>
+          {!shouldHideSlider && (
+            <div className="bg-gray-900/50 p-4 rounded-xl border border-gray-800 space-y-3 animate-in fade-in duration-200">
+              <div className="flex justify-between items-center text-[10px] font-bold text-gray-500 uppercase">
+                <span>Макс. длина</span>
+                <span className="text-indigo-400 font-mono">{maxLength} ch.</span>
+              </div>
+              <input type="range" min="50" max="500" value={maxLength} onChange={(e) => setMaxLength(e.target.value)} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-indigo-500 cursor-pointer" />
             </div>
-            <input type="range" min="50" max="500" value={maxLength} onChange={(e) => setMaxLength(e.target.value)} className="w-full h-1 bg-gray-700 rounded-lg appearance-none accent-indigo-500 cursor-pointer" />
-          </div>
+          )}
 
           {outputPrompt && (
             <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-4">
-
               <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
                   <span>Результат</span>
@@ -220,7 +244,6 @@ const RefinedPromptingService = () => {
           )}
         </div>
       </div>
-
     </div>
   );
 };
