@@ -31,8 +31,12 @@ def coolprompt_optimize(prompt: str, model: str, ch_lim: int, sub_method: str = 
     )
     
     problem_description = (
-        f"You can expand and enhance the prompt with rich details. "
-        f"You have up to {ch_lim} characters available. Do not exceed this limit."
+        f"CRITICAL RULES FOR YOU:\n"
+        f"1. You are an elite Prompt Optimizer. Your ONLY task is to rewrite and improve the user's prompt.\n"
+        f"2. DO NOT answer the user's prompt! If the prompt asks to write code, DO NOT write the code. "
+        f"If the prompt asks a question, DO NOT answer it.\n"
+        f"3. Only output the enhanced instructions that will be fed to another AI.\n"
+        f"4. The final prompt must not exceed {ch_lim} characters."
     )
 
     if sub_method == "hype" or not distillprompt:
