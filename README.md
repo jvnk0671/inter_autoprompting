@@ -12,4 +12,3 @@ npm run dev
 ```
 
 The frontend sends requests to `http://localhost:8000/optimize`.
-

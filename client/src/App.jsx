@@ -66,12 +66,14 @@ const RefinedPromptingService = () => {
   const [maxLength, setMaxLength] = useState(300);
   const [outputPrompt, setOutputPrompt] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
-  
+
   const [translate, setTranslate] = useState(false);
   const [evaluate, setEvaluate] = useState(false);
   const [metrics, setMetrics] = useState(null);
+  const [apiKey, setApiKey] = useState('');
+  const [useFreeModel, setUseFreeModel] = useState(true);
 
-  const llmOptions = [{ value: 'gpt-4', label: 'GPT-4 Turbo' }, { value: 'claude-3', label: 'Claude 3.5' }];
+  const llmOptions = [{ value: 'gpt-4', label: 'GPT-4 Turbo' }, { value: 'claude-3', label: 'Claude 3.5' }, { value: 'free', label: 'Free'}];
   const methodOptions = [{ value: 'example', label: 'Example' }, { value: 'coolprompt', label: 'CoolPrompt' }, { value: 'promptomatix', label: 'Promptomatix' }];
 
   const handleOptimize = async () => {
@@ -90,6 +92,7 @@ const RefinedPromptingService = () => {
           ch_lim: Number(maxLength),
           target_model: llm,
           system_model: llm,
+          api_key: apiKey,
           evaluate: evaluate,
           translate: translate
         }),
@@ -101,7 +104,7 @@ const RefinedPromptingService = () => {
       }
 
       setOutputPrompt(data.optimized_prompt);
-      
+
       if (data.init_score !== null && data.init_score !== undefined) {
         setMetrics({
           initScore: data.init_score,
@@ -161,6 +164,13 @@ const RefinedPromptingService = () => {
           </div>
 
           <div className="space-y-4">
+            <input
+              type="password"
+              placeholder="API Key"
+              className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-xs"
+              onChange={(e) => setApiKey(e.target.value)}
+            />
+
             <div className="flex gap-3">
               <CustomSelect label="модель" value={llm} options={llmOptions} onChange={setLlm} />
               <CustomSelect label="метод" value={method} options={methodOptions} onChange={setMethod} />
@@ -214,7 +224,7 @@ const RefinedPromptingService = () => {
 
           {outputPrompt && (
             <div className="animate-in slide-in-from-bottom-4 duration-500 space-y-4">
-              
+
               <div className="bg-indigo-950/20 border border-indigo-500/30 rounded-xl p-4 space-y-3">
                 <div className="flex justify-between items-center text-[10px] font-bold text-indigo-400 uppercase tracking-widest">
                   <span>Результат</span>
@@ -237,14 +247,14 @@ const RefinedPromptingService = () => {
                       {typeof metrics.finalScore === 'number' ? metrics.finalScore.toFixed(2) : 'N/A'}
                     </span>
                   </div>
-                  
+
                   {(metrics.initTokens || metrics.finalTokens) && (
-                     <div className="col-span-2 bg-gray-900/40 border border-gray-800 rounded-lg p-2.5 flex justify-between items-center text-[10px] text-gray-400 font-mono uppercase tracking-wider">
-                        <span>Токены</span>
-                        <span>
-                          {metrics.initTokens || 0} <span className="mx-1 opacity-50">→</span> <span className="text-indigo-400 font-bold">{metrics.finalTokens || 0}</span>
-                        </span>
-                     </div>
+                    <div className="col-span-2 bg-gray-900/40 border border-gray-800 rounded-lg p-2.5 flex justify-between items-center text-[10px] text-gray-400 font-mono uppercase tracking-wider">
+                      <span>Токены</span>
+                      <span>
+                        {metrics.initTokens || 0} <span className="mx-1 opacity-50">→</span> <span className="text-indigo-400 font-bold">{metrics.finalTokens || 0}</span>
+                      </span>
+                    </div>
                   )}
                 </div>
               )}
