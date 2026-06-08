@@ -114,7 +114,7 @@ def promptomatix_optimize(
         dynamic_max_tokens = max(300, int(ch_lim))  
         config = {
             "raw_input": task_instruction,
-            "model_name": safe_model_name,
+            "model_name": safe_model_name, 
             "model_api_key": KEY,
             "model_provider": "openai",
             "backend": "simple_meta_prompt",
@@ -124,6 +124,10 @@ def promptomatix_optimize(
             "temperature": 0.1,
             "max_tokens": dynamic_max_tokens,
             "api_base": "https://openrouter.ai/api/v1",
+            "teacher_model_name": "gpt-4o",
+            "prompt_model_name": "gpt-4o",
+            "eval_model_name": "gpt-4o",
+            "meta_prompt_model": "gpt-4o"
         }
 
         result = process_input(**config)
