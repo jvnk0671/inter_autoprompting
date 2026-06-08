@@ -37,16 +37,18 @@ class ExampleOptimiser(PromptOptimizer):
 
 class CoolPromptOptimizer(PromptOptimizer):
     def __init__(
-        self, target_model: str = std_sys_model2, system_model: Optional[str] = None
+        self, target_model: str = std_sys_model2, system_model: Optional[str] = None, sub_method: str = "hype"
     ):
         self.target_model = target_model
         self.system_model = system_model or target_model
+        self.sub_method = sub_method
 
     def optimize(self, prompt: str, ch_lim: int) -> OptimizationResult:
         optimized = coolprompt_optimize(
             prompt=prompt,
             model=self.target_model,
             ch_lim=ch_lim,
+            sub_method=self.sub_method,
         )
         return OptimizationResult(optimized_prompt=optimized)
 

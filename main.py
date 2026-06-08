@@ -36,6 +36,8 @@ class OptimizeRequest(BaseModel):
     generations: Optional[int] = 3
     eval_samples: Optional[int] = 3
 
+    coolprompt_sub_method: Optional[str] = "hype" # Доступно: "hype", "distill", "reflective"
+
     class Config:
         populate_by_name = True
 
@@ -56,7 +58,11 @@ def optimize(req: OptimizeRequest):
         raise HTTPException(status_code=400, detail="Prompt is empty")
 
     if req.method == "coolprompt":
-        optimizer = CoolPromptOptimizer(target_model=req.target_model, system_model=req.system_model)
+        optimizer = CoolPromptOptimizer(
+            target_model=req.target_model, 
+            system_model=req.system_model,
+            sub_method=req.coolprompt_sub_method
+        )
     elif req.method == "distillprompt":
         optimizer = DistillPromptOptimizer(target_model=req.target_model, system_model=req.system_model)
     elif req.method == "reflectiveprompt":
