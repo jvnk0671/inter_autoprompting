@@ -53,13 +53,6 @@ const CustomSelect = ({ label, value, options, onChange, hint }) => {
 };
 
 const RefinedPromptingService = () => {
-  const [chats] = useState([
-    { id: 1, title: 'Chat 1', date: 'today' },
-    { id: 2, title: 'Chat 2', date: 'erm ago' },
-    { id: 3, title: 'Chat 3', date: '1984' }
-  ]);
-  const [activeChatId, setActiveChatId] = useState(1);
-
   const [llm, setLlm] = useState('gpt-4');
   const [method, setMethod] = useState('example');
   const [inputPrompt, setInputPrompt] = useState('');
@@ -121,43 +114,8 @@ const RefinedPromptingService = () => {
   };
 
   return (
-    <div className="flex h-screen bg-gray-950 font-sans text-gray-200 overflow-hidden">
-
-      <aside className="w-60 bg-gray-950 border-r border-gray-800 flex flex-col flex-shrink-0">
-        <div className="p-4"><button className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-gray-900 border border-gray-700 rounded-lg hover:bg-gray-800 transition-colors text-[10px] font-bold"><Plus size={14} /> NEW CHAT</button></div>
-        <div className="flex-1 overflow-y-auto px-3 space-y-1">
-          {chats.map(chat => (
-            <div key={chat.id} onClick={() => setActiveChatId(chat.id)} className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer transition-all ${activeChatId === chat.id ? 'bg-indigo-950/40 text-indigo-400' : 'text-gray-500 hover:bg-gray-900'}`}>
-              <MessageSquare size={14} /><span className="truncate text-xs">{chat.title}</span>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      <section className="flex-1 flex flex-col bg-gray-900/20 relative">
-        <header className="h-14 border-b border-gray-800 flex items-center px-6">
-          <h2 className="text-sm font-semibold text-gray-400">Чат: {chats.find(c => c.id === activeChatId)?.title}</h2>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 text-sm">
-          <div className="max-w-2xl mx-auto opacity-30 text-center mt-20 italic">Здесь будет история вашего диалога...</div>
-        </div>
-
-        <div className="p-6 border-t border-gray-800 bg-gray-950/50">
-          <div className="max-w-3xl mx-auto relative">
-            <input
-              type="text"
-              placeholder="Спросить о..."
-              className="w-full bg-gray-900 border border-gray-700 rounded-xl py-3 px-4 pr-12 outline-none focus:border-indigo-500 transition-all text-sm"
-            />
-            <button className="absolute right-3 top-2.5 p-1 text-indigo-500 hover:text-indigo-400">
-              <Send size={20} />
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <aside className="w-[450px] bg-gray-950 border-l border-gray-800 overflow-y-auto p-6 flex-shrink-0">
+    <div className="flex h-screen items-center justify-center bg-gray-950 font-sans text-gray-200 overflow-hidden">
+      <div className="w-1/2 bg-gray-950 border-gray-800 overflow-y-auto p-6">
         <div className="space-y-6">
           <div className="flex items-center gap-2 mb-4">
             <h3 className="text-xs font-black uppercase tracking-widest text-white">Автопромптинг</h3>
@@ -261,7 +219,7 @@ const RefinedPromptingService = () => {
             </div>
           )}
         </div>
-      </aside>
+      </div>
 
     </div>
   );
